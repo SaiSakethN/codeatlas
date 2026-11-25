@@ -47,6 +47,11 @@ class Settings(BaseSettings):
 
     frontend_url: str = "http://localhost:3000"
 
+    ollama_timeout_seconds: int = 300
+    ollama_context_window: int = 8192
+    ollama_max_output_tokens: int = 768
+    ollama_keep_alive: str = "5m"
+
 
 settings = Settings()
 

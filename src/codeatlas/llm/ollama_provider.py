@@ -13,7 +13,7 @@ class OllamaProvider(AIProvider):
     def __init__(self):
         self.client = Client(
             host=settings.ollama_base_url,
-            timeout=120,
+            timeout=settings.ollama_timeout_seconds,
         )
 
     def embed_documents(
@@ -77,10 +77,11 @@ class OllamaProvider(AIProvider):
             messages=normalized,
             tools=tools or [],
             think=False,
+            keep_alive=settings.ollama_keep_alive,
             options={
                 "temperature": 0.1,
-                "num_ctx": 8192,
-                "num_predict": 1500,
+                "num_ctx": settings.ollama_context_window,
+                "num_predict": settings.ollama_max_output_tokens,
             },
         )
 
