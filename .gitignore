@@ -18,7 +18,7 @@ env/
 *.key
 
 # Runtime data
-workspace/
+/workspace/
 *.sqlite
 *.sqlite3
 *.db
@@ -40,7 +40,8 @@ htmlcov/
 
 # Operating systems
 .DS_Store
-Thumbs.dbnode_modules/
+Thumbs.db
+node_modules/
 .next/
 playwright-report/
 test-results/
