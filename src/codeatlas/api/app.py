@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from codeatlas.agents.service import CodeAtlasAgent
+from codeatlas.analysis.repository import analyze, change_impact
 from codeatlas.api.schemas import ImportRequest, QuestionRequest
 from codeatlas.api.service import RepositoryService
 from codeatlas.config import settings
@@ -137,6 +138,15 @@ def create_app(service: RepositoryService | None = None) -> FastAPI:
     @app.get("/api/repositories/{identifier}/tree")
     def tree(identifier: str):
         return {"files": sorted(tools(identifier).file_map)}
+
+    @app.get("/api/repositories/{identifier}/overview")
+    def overview(identifier: str):
+        return analyze(tools(identifier))
+
+    @app.get("/api/repositories/{identifier}/impact")
+    def impact(identifier: str):
+        repository_tools = tools(identifier)
+        return change_impact(repository_tools, analyze(repository_tools))
 
     @app.get("/api/repositories/{identifier}/source")
     def source(identifier: str, path: str = Query(max_length=500), start: int = Query(1, ge=1)):
