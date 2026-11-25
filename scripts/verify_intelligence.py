@@ -11,8 +11,7 @@ from codeatlas.tools.repository_tools import RepositoryTools
 
 def progress(current, total):
     print(
-        f"\rIndexing: {current}/{total} "
-        f"({current / total:.1%})",
+        f"\rIndexing: {current}/{total} ({current / total:.1%})",
         end="",
         flush=True,
     )
@@ -21,9 +20,7 @@ def progress(current, total):
 def main():
     start = time.perf_counter()
 
-    repository = clone_repository(
-        "https://github.com/psf/requests"
-    )
+    repository = clone_repository("https://github.com/psf/requests")
 
     print("Repository:", repository.name)
 
