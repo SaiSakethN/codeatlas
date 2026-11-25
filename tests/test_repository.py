@@ -35,3 +35,28 @@ def test_discover_python_files(tmp_path):
 def test_invalid_local_directory(tmp_path):
     with pytest.raises(ValueError):
         load_local_repository(str(tmp_path / "missing"))
+
+
+def test_clone_repository_uses_subprocess(tmp_path, monkeypatch):
+    from codeatlas.ingestion import repository
+
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+
+    monkeypatch.setattr(repository, "REPOSITORIES_DIR", tmp_path)
+
+    monkeypatch.setattr(repository.subprocess, "run", fake_run)
+
+    result = repository.clone_repository("https://github.com/psf/requests")
+
+    assert result.name == "requests"
+    assert len(calls) == 1
+
+    command, options = calls[0]
+
+    assert command[:2] == ["git", "clone"]
+    assert "--depth=1" in command
+    assert options["timeout"] == 120
+    assert options["check"] is True

@@ -1,7 +1,10 @@
 """Repository ingestion and workspace management."""
 
 import hashlib
+import os
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 from git import Repo
@@ -31,6 +34,7 @@ def clone_repository(url: str) -> Repository:
         raise ValueError("Invalid repository name.")
 
     canonical_url = f"https://github.com/{owner}/{name}.git"
+
     identifier = hashlib.sha256(canonical_url.encode()).hexdigest()[:12]
 
     REPOSITORIES_DIR.mkdir(parents=True, exist_ok=True)
@@ -41,14 +45,35 @@ def clone_repository(url: str) -> Repository:
         raise ValueError("Invalid repository destination.")
 
     if not destination.exists():
-        Repo.clone_from(
-            canonical_url,
-            destination,
-            depth=1,
-            multi_options=["--no-tags"],
-            env={"GIT_TERMINAL_PROMPT": "0"},
-            kill_after_timeout=120,
-        )
+        env = os.environ.copy()
+        env["GIT_TERMINAL_PROMPT"] = "0"
+
+        try:
+            subprocess.run(
+                [
+                    "git",
+                    "clone",
+                    "--depth=1",
+                    "--no-tags",
+                    "--",
+                    canonical_url,
+                    str(destination),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env=env,
+            )
+
+        except subprocess.TimeoutExpired as exc:
+            shutil.rmtree(destination, ignore_errors=True)
+            raise RuntimeError("Repository cloning timed out.") from exc
+
+        except subprocess.CalledProcessError as exc:
+            shutil.rmtree(destination, ignore_errors=True)
+            raise RuntimeError(f"Repository cloning failed: {exc.stderr}") from exc
+
     else:
         existing = Repo(destination)
 
