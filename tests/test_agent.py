@@ -302,3 +302,12 @@ def test_rag_handles_rate_limit():
     assert result["citations_valid"] is False
     assert len(result["sources"]) == 1
     assert result["mode"] == "rag"
+
+
+def test_normalizes_model_brackets_without_forging_citations():
+    from codeatlas.agents.evidence import normalize_citations, validate_citations
+
+    answer = normalize_citations("Implementation 【S1】; missing 【S99】.")
+    assert answer == "Implementation [S1]; missing [S99]."
+    assert not validate_citations(answer, [{"id": "S1"}])
+    assert validate_citations(normalize_citations("Implementation 【S1】."), [{"id": "S1"}])

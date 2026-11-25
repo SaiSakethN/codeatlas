@@ -7,6 +7,11 @@ MAX_SOURCE_CHARS = 2500
 MAX_CONTEXT_CHARS = 14000
 
 
+def normalize_citations(answer: str) -> str:
+    """Normalize model typography without inventing or removing citation IDs."""
+    return re.sub(r"【(S\d+)】", r"[\1]", answer)
+
+
 def collect_evidence(
     existing: list[dict],
     result,

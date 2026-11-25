@@ -6,6 +6,8 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import httpx
+
 from codeatlas.config import WORKSPACE_DIR, settings
 from codeatlas.indexing.pipeline import get_repository_id, index_repository
 from codeatlas.indexing.vector_store import VectorStore
@@ -61,6 +63,7 @@ class RepositoryService:
         try:
             self.update(identifier, status="indexing")
             with self.compute:
+                self.preflight(url)
                 repository = clone_repository(url)
                 _, statistics = index_repository(
                     repository,
@@ -86,6 +89,19 @@ class RepositoryService:
                 status="failed",
                 error="Import failed. Check repository availability and provider readiness.",
             )
+
+    def preflight(self, url: str):
+        slug = url.removeprefix("https://github.com/").removesuffix(".git")
+        response = httpx.get(
+            f"https://api.github.com/repos/{slug}",
+            timeout=15,
+            headers={"Accept": "application/vnd.github+json"},
+            follow_redirects=False,
+        )
+        response.raise_for_status()
+        metadata = response.json()
+        if metadata.get("private") or metadata.get("size", 0) > settings.max_repository_size_kb:
+            raise ValueError("Repository is private or exceeds the configured size limit.")
 
     def remove(self, identifier: str):
         with self.lock:

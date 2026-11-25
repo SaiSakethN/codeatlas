@@ -25,6 +25,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+cloud = ["fastembed>=0.7,<1"]
 dev = [
     "pytest",
     "pytest-cov",

@@ -59,8 +59,12 @@ def create_app(service: RepositoryService | None = None) -> FastAPI:
                     headers={"Retry-After": "60"},
                 )
             requests.append(now)
-            if int(request.headers.get("content-length", "0")) > 32768:
-                return JSONResponse({"error": {"code": "body_too_large"}}, status_code=413)
+            body = bytearray()
+            async for chunk in request.stream():
+                body.extend(chunk)
+                if len(body) > 32768:
+                    return JSONResponse({"error": {"code": "body_too_large"}}, status_code=413)
+            request._body = bytes(body)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Cache-Control"] = "no-store"

@@ -20,6 +20,8 @@ class VectorStore:
         embedding_model = (
             settings.ollama_embedding_model
             if settings.llm_provider == "ollama"
+            else settings.fastembed_model
+            if settings.llm_provider == "fastembed"
             else settings.openai_embedding_model
         )
 

@@ -144,7 +144,7 @@ export default function Workspace() {
   const activeJob = job && ["queued", "indexing"].includes(job.status);
   const suggested = overview?.onboarding.suggested_questions || ["What are the main entry points?", "How does error handling work?", "Where should a new contributor start?"];
 
-  return <main className="workspace">
+  return <main className={`workspace ${evidenceOpen ? "" : "evidence-collapsed"}`}>
     <aside className={`sidebar ${mobileNav ? "open" : ""}`} aria-label="Repository navigation">
       <div className="flex items-center justify-between"><Link href="/" className="brand"><Compass size={24} />CodeAtlas</Link><Button className="mobile-toggle" variant="ghost" size="icon" aria-label="Close navigation" onClick={() => setMobileNav(false)}><X /></Button></div>
       <div><label className="eyebrow block mb-3" htmlFor="repository">Repository</label><select id="repository" value={selected} onChange={e => switchRepository(e.target.value)}><option value="">Select a repository</option>{repositories.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select><Button className="w-full mt-3" variant="outline" size="sm" onClick={() => { setShowImport(true); setMobileNav(false); }}><Plus />Import repository</Button></div>

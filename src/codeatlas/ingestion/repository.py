@@ -47,12 +47,19 @@ def clone_repository(url: str) -> Repository:
     if not destination.exists():
         env = os.environ.copy()
         env["GIT_TERMINAL_PROMPT"] = "0"
+        env["GIT_LFS_SKIP_SMUDGE"] = "1"
 
         try:
             subprocess.run(
                 [
                     "git",
                     "clone",
+                    "--config",
+                    "core.hooksPath=/dev/null",
+                    "--config",
+                    "filter.lfs.smudge=",
+                    "--config",
+                    "filter.lfs.required=false",
                     "--depth=1",
                     "--no-tags",
                     "--",

@@ -11,6 +11,7 @@ from openai import (
 from codeatlas.agents.evidence import (
     collect_evidence,
     format_evidence,
+    normalize_citations,
     select_evidence,
     validate_citations,
 )
@@ -133,7 +134,7 @@ class CodeRAG:
                 "model_api_error",
             )
 
-        answer = (response.get("content") or "").strip()
+        answer = normalize_citations((response.get("content") or "").strip())
 
         if not answer:
             return failure(

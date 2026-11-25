@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -25,7 +26,8 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     environment: Literal["development", "production"] = "development"
 
-    llm_provider: Literal["ollama", "openai"] = "ollama"
+    llm_provider: Literal["ollama", "openai", "fastembed"] = "ollama"
+    fastembed_model: str = "sentence-transformers/all-MiniLM-L6-v2"
 
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"
@@ -42,13 +44,16 @@ class Settings(BaseSettings):
     agent_max_steps: int = 8
     agent_timeout_seconds: int = 180
 
-    max_repository_files: int = 2000
-    max_file_size: int = 500_000
+    max_repository_files: int = Field(default=2000, ge=1, le=2000)
+    max_file_size: int = Field(default=500_000, ge=1, le=500_000)
+    max_source_bytes: int = Field(default=10_000_000, ge=1, le=10_000_000)
+    max_index_chunks: int = Field(default=5000, ge=1, le=5000)
 
     frontend_url: str = "http://localhost:3000"
     api_token: str = ""
     api_requests_per_minute: int = 60
     max_repositories: int = 5
+    max_repository_size_kb: int = 20000
 
     ollama_timeout_seconds: int = 300
     ollama_context_window: int = 8192

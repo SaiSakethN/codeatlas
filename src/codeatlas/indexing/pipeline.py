@@ -2,6 +2,7 @@
 
 import hashlib
 
+from codeatlas.config import settings
 from codeatlas.indexing.vector_store import VectorStore
 from codeatlas.ingestion.explorer import discover_python_files
 from codeatlas.models import Repository
@@ -36,6 +37,9 @@ def index_repository(
 
     files = discover_python_files(repository.path)
 
+    if sum(path.stat().st_size for path in files) > settings.max_source_bytes:
+        raise ValueError("Repository exceeds the source size budget.")
+
     chunks = []
     failed_files = []
     symbol_count = 0
@@ -58,6 +62,9 @@ def index_repository(
             ValueError,
         ):
             failed_files.append(path.relative_to(repository.path).as_posix())
+
+        if len(chunks) > settings.max_index_chunks:
+            raise ValueError("Repository exceeds the index chunk budget.")
 
     if not chunks:
         raise ValueError("No indexable Python code found.")

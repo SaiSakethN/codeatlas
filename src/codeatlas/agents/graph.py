@@ -15,6 +15,7 @@ from openai import (
 from codeatlas.agents.evidence import (
     collect_evidence,
     format_evidence,
+    normalize_citations,
     select_evidence,
     validate_citations,
 )
@@ -517,7 +518,7 @@ def build_agent_graph(provider, registry):
             flush=True,
         )
 
-        answer = (response.get("content") or "").strip()
+        answer = normalize_citations((response.get("content") or "").strip())
 
         if not answer:
             return failure(

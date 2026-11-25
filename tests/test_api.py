@@ -89,6 +89,7 @@ def test_job_success_and_failure(service, monkeypatch):
     from codeatlas.api import service as module
 
     repository = service.repository("test")
+    monkeypatch.setattr(service, "preflight", lambda url: None)
     monkeypatch.setattr(module, "clone_repository", lambda url: repository)
     monkeypatch.setattr(module, "index_repository", lambda *a, **k: (None, {"chunks": 3}))
     service.jobs["one"] = {}
@@ -109,3 +110,35 @@ def test_job_success_and_failure(service, monkeypatch):
 def test_missing_resources(client):
     assert client.get("/api/jobs/missing").status_code == 404
     assert client.get("/api/repositories/missing/tree").status_code == 404
+
+
+def test_oversized_body_rejected(client):
+    result = client.post(
+        "/api/repositories",
+        content=b"x" * 32769,
+        headers={"Content-Type": "application/json"},
+    )
+    assert result.status_code == 413
+
+
+def test_production_requires_strong_token(service, monkeypatch):
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "api_token", "")
+    with pytest.raises(RuntimeError, match="Production requires"):
+        with TestClient(create_app(service)):
+            pass
+
+
+def test_repository_preflight_enforces_size(service, monkeypatch):
+    from codeatlas.api import service as module
+
+    class Metadata:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"size": settings.max_repository_size_kb + 1, "private": False}
+
+    monkeypatch.setattr(module.httpx, "get", lambda *a, **k: Metadata())
+    with pytest.raises(ValueError, match="size limit"):
+        service.preflight("https://github.com/example/fixture")

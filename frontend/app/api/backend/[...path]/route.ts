@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticated } from "@/lib/session";
+import { authenticated, sameOrigin } from "@/lib/session";
 
 export const maxDuration = 300;
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   if (!authenticated(request.cookies.get("codeatlas-session")?.value)) return NextResponse.json({ error: { message: "Sign in to the workspace first." } }, { status: 401 });
-  if (request.method !== "GET" && request.headers.get("origin") !== request.nextUrl.origin) return NextResponse.json({ error: { message: "Invalid origin." } }, { status: 403 });
+  if (request.method !== "GET" && !sameOrigin(request)) return NextResponse.json({ error: { message: "Invalid origin." } }, { status: 403 });
   const { path } = await context.params;
   const route = "/" + path.join("/");
   if (!/^\/api\/(repositories(\/[a-zA-Z0-9]+(\/(tree|source|overview|impact|questions))?)?|jobs\/[a-zA-Z0-9]+|readiness)$/.test(route)) return NextResponse.json({ error: { message: "Unknown endpoint." } }, { status: 404 });

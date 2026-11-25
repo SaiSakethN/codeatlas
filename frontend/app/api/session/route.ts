@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { equal, sign } from "@/lib/session";
+import { equal, sign, sameOrigin } from "@/lib/session";
 
 const attempts = new Map<string, { count: number; until: number }>();
 export async function POST(request: NextRequest) {
-  if (request.headers.get("origin") !== request.nextUrl.origin) return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
+  if (!sameOrigin(request)) return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
   const expected = process.env.FRONTEND_PASSWORD;
   if (!expected || expected.length < 16) return NextResponse.json({ error: "Configure FRONTEND_PASSWORD (at least 16 characters)." }, { status: 503 });
   const key = request.headers.get("x-forwarded-for")?.split(",")[0] || "local";

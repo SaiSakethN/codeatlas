@@ -11,13 +11,20 @@ from codeatlas.llm.openai_provider import OpenAIProvider
 def get_ai_provider() -> AIProvider:
     embedding_name = settings.llm_provider
 
-    chat_name = settings.chat_provider or embedding_name
+    chat_name = settings.chat_provider or (
+        "ollama" if embedding_name == "fastembed" else embedding_name
+    )
 
     if embedding_name == "ollama":
         embedding_provider = OllamaProvider()
 
     elif embedding_name == "openai":
         embedding_provider = OpenAIProvider()
+
+    elif embedding_name == "fastembed":
+        from codeatlas.llm.fastembed_provider import FastEmbedProvider
+
+        embedding_provider = FastEmbedProvider()
 
     else:
         raise ValueError(f"Unsupported embedding provider: {embedding_name}")

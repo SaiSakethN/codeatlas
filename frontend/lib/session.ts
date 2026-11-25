@@ -13,3 +13,12 @@ export function authenticated(cookie: string | undefined) {
   const [expiry, signature] = cookie.split(".");
   return Number(expiry) > Date.now() && equal(signature || "", sign(expiry));
 }
+
+export function sameOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+  try {
+    const url = new URL(origin);
+    return ["http:", "https:"].includes(url.protocol) && url.host === request.headers.get("host");
+  } catch { return false; }
+}

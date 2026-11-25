@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 
+from codeatlas.config import settings
+
 IGNORED_DIRECTORIES = {
     ".git",
     ".venv",
@@ -48,7 +50,7 @@ def discover_python_files(root: Path) -> list[Path]:
                 if not path.resolve().is_relative_to(root):
                     continue
 
-                if path.stat().st_size > MAX_FILE_SIZE:
+                if path.stat().st_size > min(MAX_FILE_SIZE, settings.max_file_size):
                     continue
 
                 files.append(path)
@@ -56,7 +58,7 @@ def discover_python_files(root: Path) -> list[Path]:
             except OSError:
                 continue
 
-            if len(files) >= MAX_FILES:
+            if len(files) >= min(MAX_FILES, settings.max_repository_files):
                 return files
 
     return files
