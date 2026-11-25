@@ -121,7 +121,12 @@ export default function Workspace() {
 
   async function importRepository(event: React.FormEvent) {
     event.preventDefault(); setError("");
-    try { setJob(await api<Job>("/api/repositories", { method: "POST", body: JSON.stringify({ url }) })); }
+    const repositoryUrl = url.trim().replace(/\/$/, "");
+    if (!/^https:\/\/github\.com\/[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/.test(repositoryUrl)) {
+      setError("Enter the repository URL (https://github.com/owner/repo), not a file or folder link.");
+      return;
+    }
+    try { setJob(await api<Job>("/api/repositories", { method: "POST", body: JSON.stringify({ url: repositoryUrl }) })); }
     catch (e) { setError((e as Error).message); }
   }
 

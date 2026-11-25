@@ -29,6 +29,16 @@ test("landing and responsive layout", async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
 });
 
+test("import explains why a GitHub file URL is invalid", async ({ page }) => {
+  await page.route("**/api/backend/api/repositories", route => route.fulfill({ json: [] }));
+  await page.goto("/workspace");
+  await page.getByLabel("Public GitHub repository URL").fill(
+    "https://github.com/SaiSakethN/careflow-ai/blob/main/src/careflow/api.py",
+  );
+  await page.getByRole("button", { name: "Import & index" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "not a file or folder link" })).toBeVisible();
+});
+
 test("public repository import, exploration, architecture and source", async ({ page }) => {
   test.skip(process.env.E2E_LIVE !== "1", "Requires the local API and embedding provider.");
   await page.goto("/workspace");
