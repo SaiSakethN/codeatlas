@@ -2,6 +2,8 @@
 
 **Navigate code. Discover connections.**
 
+**Live application:** https://codeatlas-alpha-sooty.vercel.app — the workspace requires your configured password.
+
 CodeAtlas helps developers enter unfamiliar Python codebases. Ask a question, inspect the implementation behind the answer, and explore how modules connect. It combines the original intelligence engine with a Next.js workspace and FastAPI service.
 
 ![Investigation workspace](docs/screenshots/investigation.png)
@@ -106,7 +108,7 @@ Local Playwright uses installed Chrome; CI installs Chromium. CI checks Python q
 
 ## Deployment and limits
 
-[Deployment instructions](docs/deployment.md) cover Vercel (`frontend` root), Docker, and an explicit free-plan Render blueprint. [Security notes](docs/security.md) describe safeguards and remaining limits. **No full production deployment is verified yet.** A working public URL will be added after frontend/backend smoke tests.
+[Deployment instructions](docs/deployment.md) cover Vercel (`frontend` root), Docker, and an explicit free-plan Render blueprint. [Security notes](docs/security.md) describe safeguards and remaining limits. Vercel and Render deployments are live; public page and authentication-boundary checks pass. Authenticated production import and AI smoke tests still require the owner's signed-in browser session.
 
 FastEmbed CPU embeddings work without Ollama and use separate collection identities, preventing silent mixing with nomic embeddings. Install with `pip install -e ".[cloud]"` and select `LLM_PROVIDER=fastembed` plus a separate `CHAT_PROVIDER`. The small model's code retrieval quality has not been benchmarked here.
 

@@ -1,6 +1,10 @@
 # Deployment
 
-No deployed full-stack URL has been verified. The application works locally; external hosting and secrets must be configured before publishing an operational workspace.
+Live frontend: https://codeatlas-alpha-sooty.vercel.app
+
+Live backend health: https://codeatlas-api-mtj7.onrender.com/health
+
+Both hosts deployed commit `10f1189` from `develop` successfully on November 25, 2026. Public frontend routes return 200; anonymous frontend and backend repository API requests return 401. Authenticated production import and inference checks remain pending owner sign-in. Local production-mode end-to-end checks passed earlier.
 
 ## Backend: Render free demo
 

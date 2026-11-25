@@ -43,10 +43,21 @@ Existing retrieval, provider composition, agent-tool execution, citation members
 
 ## Not yet verified
 
-- Full production deployment and external deployment smoke tests: Render is not connected.
-- Actual free-host memory capacity, cold-start duration, and restart behavior.
-- Docker image execution on a production host.
+- Authenticated deployed repository import and AI requests; requires owner sign-in.
+- Memory capacity during free-host embedding/indexing, cold-start duration, and restart behavior.
 - Rotation of the previously exposed Groq credential.
 - Distributed throttling, durable jobs, or multi-user isolation; these are not implemented.
 
 No paid hosting feature was enabled and no branch was merged into `main`.
+
+## Deployment update
+
+Render successfully built and runs the Docker image from commit `10f1189`. A targeted four-test initialization run verified the writable workspace override; GitHub Actions for that commit passed. Vercel deployed the same commit with Node 24 and Production secrets present (values were not revealed).
+
+- Frontend: https://codeatlas-alpha-sooty.vercel.app — `/` and `/workspace` returned 200.
+- Backend: https://codeatlas-api-mtj7.onrender.com/health — returned 200 with application health JSON.
+- Both frontend-proxy and backend anonymous repository API requests returned 401.
+- Vercel deployment: `dpl_HkM5hJveA8fRyoHM3ppxz65LuBBM` (READY).
+- Render deployment: `dep-dc3clp5g1s2s73d45140` (Live).
+
+These checks establish deployment and access-control boundaries, not successful authenticated hosted inference. The remaining production smoke test needs the owner's workspace login.
