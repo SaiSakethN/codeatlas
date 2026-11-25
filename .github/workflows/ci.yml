@@ -44,3 +44,26 @@ jobs:
 
       - name: Run automated tests
         run: python -m pytest -v --cov=codeatlas --cov-report=term-missing
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Browser smoke test
+        run: |
+          npm start &
+          node -e "const u='http://127.0.0.1:3000'; const wait=async()=>{for(let i=0;i<60;i++){try{if((await fetch(u)).ok)return}catch{} await new Promise(r=>setTimeout(r,1000))}process.exit(1)};wait()"
+          npm run test:e2e -- --grep "landing and responsive"
