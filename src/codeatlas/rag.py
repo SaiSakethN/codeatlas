@@ -1,4 +1,12 @@
-"""Conversational repository question answering."""
+"""Grounded repository question answering."""
+
+import httpx
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    RateLimitError,
+)
 
 from codeatlas.agents.evidence import (
     collect_evidence,
@@ -12,6 +20,8 @@ from codeatlas.llm.factory import get_ai_provider
 
 
 class CodeRAG:
+    """Answer repository questions using retrieved source evidence."""
+
     def __init__(self, retriever, provider=None):
         self.retriever = retriever
         self.provider = provider or get_ai_provider()
@@ -32,54 +42,104 @@ class CodeRAG:
         history = history or []
 
         previous_questions = [
-            item["content"][:500] for item in history[-6:] if item.get("role") == "user"
+            message.get("content", "") for message in history[-6:] if message.get("role") == "user"
         ]
 
-        search_query = "\n".join([*previous_questions[-1:], question])
+        retrieval_query = question
+
+        if previous_questions:
+            retrieval_query = f"{previous_questions[-1][:500]}\n{question}"
 
         results = self.retriever.search(
-            search_query,
+            retrieval_query,
             top_k=settings.retrieval_top_k,
         )
 
         evidence = select_evidence(collect_evidence([], results))
 
-        if not evidence:
+        def failure(
+            message: str,
+            reason: str,
+        ) -> dict:
             return {
-                "answer": "Insufficient repository evidence.",
-                "sources": [],
+                "answer": message,
+                "sources": evidence,
                 "citations_valid": False,
                 "mode": "rag",
+                "termination_reason": reason,
             }
+
+        if not evidence:
+            return failure(
+                "I could not find sufficient source evidence to answer this question reliably.",
+                "insufficient_evidence",
+            )
 
         conversation = [
             {
-                "role": item["role"],
-                "content": item["content"][:1000],
+                "role": message["role"],
+                "content": str(message.get("content", ""))[:1000],
             }
-            for item in history[-4:]
-            if item.get("role") in {"user", "assistant"}
+            for message in history[-4:]
+            if message.get("role")
+            in {
+                "user",
+                "assistant",
+            }
         ]
 
-        response = self.provider.chat(
-            messages=[
-                {
-                    "role": "system",
-                    "content": FINAL_SYSTEM_PROMPT,
-                },
-                *conversation,
-                {
-                    "role": "user",
-                    "content": (
-                        f"Question:\n{question}\n\n"
-                        f"Current source evidence:\n"
-                        f"{format_evidence(evidence)}"
-                    ),
-                },
-            ]
-        )
+        context = format_evidence(evidence)
 
-        answer = response["content"]
+        messages = [
+            {
+                "role": "system",
+                "content": FINAL_SYSTEM_PROMPT,
+            },
+            *conversation,
+            {
+                "role": "user",
+                "content": (f"Question:\n{question}\n\nSource evidence:\n{context}"),
+            },
+        ]
+
+        try:
+            response = self.provider.chat(
+                messages=messages,
+            )
+
+        except RateLimitError:
+            return failure(
+                "The hosted AI provider has reached its "
+                "rate limit. Please try again shortly. "
+                "Retrieved source evidence is still available.",
+                "rate_limit",
+            )
+
+        except (httpx.TimeoutException, APITimeoutError):
+            return failure(
+                "The AI provider timed out. Please try again.",
+                "model_timeout",
+            )
+
+        except (httpx.RequestError, APIConnectionError):
+            return failure(
+                "Could not connect to the AI provider. Please try again.",
+                "model_connection_error",
+            )
+
+        except APIStatusError:
+            return failure(
+                "The AI provider rejected the request.",
+                "model_api_error",
+            )
+
+        answer = (response.get("content") or "").strip()
+
+        if not answer:
+            return failure(
+                "The AI provider returned an empty answer.",
+                "empty_response",
+            )
 
         return {
             "answer": answer,
@@ -89,4 +149,5 @@ class CodeRAG:
                 evidence,
             ),
             "mode": "rag",
+            "termination_reason": "completed",
         }

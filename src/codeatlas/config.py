@@ -52,6 +52,15 @@ class Settings(BaseSettings):
     ollama_max_output_tokens: int = 768
     ollama_keep_alive: str = "5m"
 
+    chat_provider: Literal["ollama", "openai", "groq"] | None = None
+
+    groq_api_key: str = ""
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_timeout_seconds: int = 60
+    groq_max_output_tokens: int = 1024
+    groq_reasoning_effort: Literal["low", "medium", "high"] = "low"
+
 
 settings = Settings()
 

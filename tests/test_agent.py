@@ -256,3 +256,49 @@ def test_agent_uses_initial_evidence_without_tool_calls():
     assert result["citations_valid"]
     assert len(result["sources"]) == 1
     assert result["trace"][0]["tool"] == "semantic_search"
+
+
+def test_rag_handles_rate_limit():
+    import httpx
+    from openai import RateLimitError
+
+    from codeatlas.rag import CodeRAG
+
+    class RateLimitedProvider:
+        def chat(self, messages, tools=None):
+            response = httpx.Response(
+                status_code=429,
+                request=httpx.Request(
+                    "POST",
+                    "https://example.com/v1/chat/completions",
+                ),
+            )
+
+            raise RateLimitError(
+                "Rate limit reached",
+                response=response,
+                body=None,
+            )
+
+    class Retriever:
+        def search(self, query, top_k=3):
+            return [
+                {
+                    "file_path": "auth.py",
+                    "start_line": 1,
+                    "end_line": 2,
+                    "content": "def login():\n    return True",
+                }
+            ]
+
+    rag = CodeRAG(
+        retriever=Retriever(),
+        provider=RateLimitedProvider(),
+    )
+
+    result = rag.ask("How does login work?")
+
+    assert result["termination_reason"] == "rate_limit"
+    assert result["citations_valid"] is False
+    assert len(result["sources"]) == 1
+    assert result["mode"] == "rag"

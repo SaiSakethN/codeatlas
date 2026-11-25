@@ -5,6 +5,12 @@ import time
 
 import httpx
 from langgraph.graph import END, START, StateGraph
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    RateLimitError,
+)
 
 from codeatlas.agents.evidence import (
     collect_evidence,
@@ -18,12 +24,21 @@ from codeatlas.config import settings
 
 
 def build_agent_graph(provider, registry):
+    """Build and compile the repository investigation workflow."""
+
     tool_schemas = registry.schemas()
 
     def expired(state: AgentState) -> bool:
         elapsed = time.monotonic() - state["started_at"]
-
         return elapsed >= settings.agent_timeout_seconds
+
+    def message_size(state: AgentState) -> int:
+        return len(
+            json.dumps(
+                state["messages"],
+                default=str,
+            )
+        )
 
     def retrieve_initial_evidence(state: AgentState) -> dict:
         """Retrieve relevant code before autonomous investigation."""
@@ -138,7 +153,7 @@ def build_agent_graph(provider, registry):
                 tools=tool_schemas,
             )
 
-        except httpx.TimeoutException:
+        except (httpx.TimeoutException, APITimeoutError):
             print(
                 "[Agent] Model inference timed out.",
                 flush=True,
@@ -148,7 +163,17 @@ def build_agent_graph(provider, registry):
                 "termination_reason": "model_timeout",
             }
 
-        except httpx.RequestError:
+        except RateLimitError:
+            print(
+                "[Agent] Hosted API rate limit reached.",
+                flush=True,
+            )
+
+            return {
+                "termination_reason": "rate_limit",
+            }
+
+        except (httpx.RequestError, APIConnectionError):
             print(
                 "[Agent] Model connection failed.",
                 flush=True,
@@ -156,6 +181,16 @@ def build_agent_graph(provider, registry):
 
             return {
                 "termination_reason": "model_connection_error",
+            }
+
+        except APIStatusError as exc:
+            print(
+                f"[Agent] API request failed: HTTP {exc.status_code}",
+                flush=True,
+            )
+
+            return {
+                "termination_reason": "model_api_error",
             }
 
         elapsed = time.perf_counter() - started
@@ -207,7 +242,7 @@ def build_agent_graph(provider, registry):
         calls = messages[-1].get("tool_calls") or []
 
         for index, call in enumerate(calls):
-            start = time.perf_counter()
+            started = time.perf_counter()
 
             function = call["function"]
             name = function["name"]
@@ -263,7 +298,7 @@ def build_agent_graph(provider, registry):
                 }
 
             duration = round(
-                (time.perf_counter() - start) * 1000,
+                (time.perf_counter() - started) * 1000,
                 2,
             )
 
@@ -320,14 +355,7 @@ def build_agent_graph(provider, registry):
         if state["steps"] >= settings.agent_max_steps:
             return "finalize"
 
-        message_size = len(
-            json.dumps(
-                state["messages"],
-                default=str,
-            )
-        )
-
-        if message_size > 22000:
+        if message_size(state) > 22000:
             return "finalize"
 
         return "call_model"
@@ -346,15 +374,7 @@ def build_agent_graph(provider, registry):
             elif state["steps"] >= settings.agent_max_steps:
                 reason = "step_limit"
 
-            elif (
-                len(
-                    json.dumps(
-                        state["messages"],
-                        default=str,
-                    )
-                )
-                > 22000
-            ):
+            elif message_size(state) > 22000:
                 reason = "context_limit"
 
             else:
@@ -365,44 +385,55 @@ def build_agent_graph(provider, registry):
             flush=True,
         )
 
-        # Preserve evidence when the model connection fails.
+        def failure(
+            message: str,
+            termination: str,
+        ) -> dict:
+            """Return a consistent failure response."""
+
+            return {
+                "answer": message,
+                "evidence": evidence,
+                "citations_valid": False,
+                "termination_reason": termination,
+            }
+
+        # Handle failures from the investigation stage.
+
+        if reason == "rate_limit":
+            return failure(
+                "The hosted AI provider reached its rate limit. "
+                "Please try again later. Any collected source "
+                "evidence is available for inspection.",
+                reason,
+            )
+
         if reason in {
             "model_timeout",
             "model_connection_error",
+            "model_api_error",
         }:
-            return {
-                "answer": (
-                    "The AI provider could not complete "
-                    "the investigation. Any collected source "
-                    "evidence is available for inspection."
-                ),
-                "evidence": evidence,
-                "citations_valid": False,
-                "termination_reason": reason,
-            }
+            return failure(
+                "The AI provider could not complete "
+                "the investigation. Any collected source "
+                "evidence is available for inspection.",
+                reason,
+            )
 
         if expired(state):
-            return {
-                "answer": (
-                    "The investigation reached its time limit. "
-                    "Any collected evidence is available "
-                    "for inspection."
-                ),
-                "evidence": evidence,
-                "citations_valid": False,
-                "termination_reason": "time_limit",
-            }
+            return failure(
+                "The investigation reached its time limit. "
+                "Any collected evidence is available "
+                "for inspection.",
+                "time_limit",
+            )
 
         if not evidence:
-            return {
-                "answer": (
-                    "I could not collect sufficient source-code "
-                    "evidence to answer this question reliably."
-                ),
-                "evidence": [],
-                "citations_valid": False,
-                "termination_reason": reason,
-            }
+            return failure(
+                "I could not collect sufficient source-code "
+                "evidence to answer this question reliably.",
+                reason,
+            )
 
         context = format_evidence(evidence)
 
@@ -429,39 +460,55 @@ def build_agent_graph(provider, registry):
                 ]
             )
 
-        except httpx.TimeoutException:
+        except (httpx.TimeoutException, APITimeoutError):
             print(
                 "[Agent] Final answer generation timed out.",
                 flush=True,
             )
 
-            return {
-                "answer": (
-                    "Source evidence was collected, but "
-                    "the AI provider timed out while "
-                    "generating the final answer."
-                ),
-                "evidence": evidence,
-                "citations_valid": False,
-                "termination_reason": "finalization_error",
-            }
+            return failure(
+                "Source evidence was collected, but "
+                "the AI provider timed out while "
+                "generating the final answer.",
+                "finalization_error",
+            )
 
-        except httpx.RequestError:
+        except RateLimitError:
+            print(
+                "[Agent] Hosted API rate limit reached.",
+                flush=True,
+            )
+
+            return failure(
+                "Source evidence was collected, but "
+                "the hosted AI provider reached its rate limit. "
+                "Please try again later.",
+                "rate_limit",
+            )
+
+        except (httpx.RequestError, APIConnectionError):
             print(
                 "[Agent] Final answer generation failed.",
                 flush=True,
             )
 
-            return {
-                "answer": (
-                    "Source evidence was collected, but "
-                    "the AI provider connection failed "
-                    "during final answer generation."
-                ),
-                "evidence": evidence,
-                "citations_valid": False,
-                "termination_reason": "finalization_error",
-            }
+            return failure(
+                "Source evidence was collected, but "
+                "the AI provider connection failed "
+                "during final answer generation.",
+                "finalization_error",
+            )
+
+        except APIStatusError as exc:
+            print(
+                f"[Agent] Final API request failed: HTTP {exc.status_code}",
+                flush=True,
+            )
+
+            return failure(
+                "Source evidence was collected, but the AI provider rejected the final request.",
+                "model_api_error",
+            )
 
         elapsed = time.perf_counter() - started
 
@@ -470,7 +517,13 @@ def build_agent_graph(provider, registry):
             flush=True,
         )
 
-        answer = response["content"]
+        answer = (response.get("content") or "").strip()
+
+        if not answer:
+            return failure(
+                "Source evidence was collected, but the AI provider returned an empty answer.",
+                "empty_response",
+            )
 
         valid = validate_citations(
             answer,
@@ -490,6 +543,7 @@ def build_agent_graph(provider, registry):
         }
 
     # Build the LangGraph workflow.
+
     graph = StateGraph(AgentState)
 
     graph.add_node(
