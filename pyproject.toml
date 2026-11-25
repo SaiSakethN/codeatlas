@@ -10,6 +10,18 @@ requires-python = ">=3.12"
 readme = "README.md"
 dependencies = [
     "gitpython",
+    "fastapi",
+    "uvicorn[standard]",
+    "chromadb",
+    "ollama",
+    "openai",
+    "langgraph",
+    "rank-bm25",
+    "networkx",
+    "pydantic",
+    "pydantic-settings",
+    "python-dotenv",
+    "httpx",
 ]
 
 [project.optional-dependencies]
