@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     max_file_size: int = 500_000
 
     frontend_url: str = "http://localhost:3000"
+    api_token: str = ""
+    api_requests_per_minute: int = 60
+    max_repositories: int = 5
 
     ollama_timeout_seconds: int = 300
     ollama_context_window: int = 8192
