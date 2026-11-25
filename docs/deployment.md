@@ -16,6 +16,8 @@ Required environment:
 
 The container installs the optional `cloud` dependencies and runs as an unprivileged user. FastEmbed lazily downloads `sentence-transformers/all-MiniLM-L6-v2` ONNX weights, using two inference threads. Its model card uses Apache 2.0. Chroma collections include provider and embedding model in their identity; reimport repositories after switching models.
 
+Docker sets `CODEATLAS_WORKSPACE_DIR=/app/workspace` so installed packages write runtime data to the application-owned directory rather than Python's library directory.
+
 Keep one Uvicorn worker. Repository import is serialized with inference. Defaults cap discovered Python files at 2,000, individual source size at 500 KB, aggregate source at 10 MB, and chunks at 5,000. The free blueprint further limits catalog size and GitHub-reported repository size. Reduce these limits if the host's memory requires it.
 
 Free-service constraints: [Render free services](https://render.com/docs/free) and [Render FAQ](https://render.com/docs/faq). Files are ephemeral, idle services spin down, and the initial embedding-model download adds startup time. Memory fit requires testing on the actual host.

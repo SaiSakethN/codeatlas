@@ -1,5 +1,6 @@
 """Central configuration for CodeAtlas."""
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -8,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-WORKSPACE_DIR = PROJECT_ROOT / "workspace"
+WORKSPACE_DIR = Path(os.environ.get("CODEATLAS_WORKSPACE_DIR", PROJECT_ROOT / "workspace"))
 REPOSITORIES_DIR = WORKSPACE_DIR / "repositories"
 INDEXES_DIR = WORKSPACE_DIR / "indexes"
 

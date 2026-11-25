@@ -21,3 +21,26 @@ def test_workspace_initialization():
 
     assert REPOSITORIES_DIR.is_dir()
     assert INDEXES_DIR.is_dir()
+
+
+def test_installed_runtime_workspace_override(tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from codeatlas.config import WORKSPACE_DIR, initialize_workspace; "
+                "initialize_workspace(); print(WORKSPACE_DIR)"
+            ),
+        ],
+        env={**os.environ, "CODEATLAS_WORKSPACE_DIR": str(tmp_path)},
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.strip() == str(tmp_path)
+    assert (tmp_path / "indexes").is_dir()

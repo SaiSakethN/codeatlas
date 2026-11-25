@@ -5,5 +5,5 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install --no-cache-dir '.[cloud]' && useradd --create-home atlas && mkdir workspace && chown atlas:atlas workspace
 USER atlas
-ENV ENVIRONMENT=production LLM_PROVIDER=fastembed CHAT_PROVIDER=groq
+ENV ENVIRONMENT=production LLM_PROVIDER=fastembed CHAT_PROVIDER=groq CODEATLAS_WORKSPACE_DIR=/app/workspace
 CMD ["sh", "-c", "uvicorn codeatlas.api.app:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
