@@ -142,3 +142,40 @@ def test_repository_preflight_enforces_size(service, monkeypatch):
     monkeypatch.setattr(module.httpx, "get", lambda *a, **k: Metadata())
     with pytest.raises(ValueError, match="size limit"):
         service.preflight("https://github.com/example/fixture")
+
+
+def test_health_responds_when_sync_worker_pool_is_busy(service, monkeypatch):
+    import asyncio
+    import threading
+
+    import anyio
+    import httpx
+
+    monkeypatch.setattr(settings, "api_token", "")
+    application = create_app(service)
+    started, release = threading.Event(), threading.Event()
+
+    @application.get("/hold-worker")
+    def hold_worker():
+        started.set()
+        release.wait(5)
+        return {"released": True}
+
+    async def scenario():
+        limiter = anyio.to_thread.current_default_thread_limiter()
+        original = limiter.total_tokens
+        limiter.total_tokens = 1
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=application), base_url="http://test"
+        ) as client:
+            occupied = asyncio.create_task(client.get("/hold-worker"))
+            try:
+                assert await asyncio.to_thread(started.wait, 2)
+                response = await asyncio.wait_for(client.get("/health"), timeout=1)
+                assert response.status_code == 200
+            finally:
+                release.set()
+                await occupied
+                limiter.total_tokens = original
+
+    asyncio.run(scenario())

@@ -102,7 +102,7 @@ def create_app(service: RepositoryService | None = None) -> FastAPI:
             raise HTTPException(404, "Repository not found.") from exc
 
     @app.get("/health")
-    def health():
+    async def health():
         return {"status": "ok", "version": "0.2.0"}
 
     @app.get("/api/readiness")

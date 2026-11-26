@@ -66,4 +66,4 @@ jobs:
         run: |
           npm start &
           node -e "const u='http://127.0.0.1:3000'; const wait=async()=>{for(let i=0;i<60;i++){try{if((await fetch(u)).ok)return}catch{} await new Promise(r=>setTimeout(r,1000))}process.exit(1)};wait()"
-          npm run test:e2e -- --grep "landing and responsive"
+          npm run test:e2e -- --grep "landing and responsive|import explains|expired session|HTML backend|index progress recovers"

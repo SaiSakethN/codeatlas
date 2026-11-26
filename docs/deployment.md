@@ -18,7 +18,7 @@ Required environment:
 - `API_TOKEN`: a private random token of at least 32 characters; missing/short tokens prevent production startup.
 - `FRONTEND_URL`: exact frontend origin.
 
-The container installs the optional `cloud` dependencies and runs as an unprivileged user. FastEmbed lazily downloads `sentence-transformers/all-MiniLM-L6-v2` ONNX weights, using two inference threads. Its model card uses Apache 2.0. Chroma collections include provider and embedding model in their identity; reimport repositories after switching models.
+The container installs the optional `cloud` dependencies and runs as an unprivileged user. FastEmbed lazily downloads `sentence-transformers/all-MiniLM-L6-v2` ONNX weights, using one inference thread and batches of four by default. Native math/tokenizer thread pools are also constrained for free-host CPU limits. Its model card uses Apache 2.0. Chroma collections include provider and embedding model in their identity; reimport repositories after switching models.
 
 Docker sets `CODEATLAS_WORKSPACE_DIR=/app/workspace` so installed packages write runtime data to the application-owned directory rather than Python's library directory.
 

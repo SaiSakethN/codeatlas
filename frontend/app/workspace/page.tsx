@@ -7,7 +7,7 @@ import { Compass, Plus, MessagesSquare, LayoutDashboard, GitBranch, BookOpen, Gi
 import { Button } from "@/components/ui/button";
 import { FileTree } from "@/components/file-tree";
 import { GroundedAnswer } from "@/components/answer";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import type { Repository, Overview, Impact, Job, Source, Answer } from "@/lib/types";
 
 const Architecture = dynamic(() => import("@/components/architecture"), { ssr: false, loading: () => <p className="muted">Loading architecture viewer…</p> });
@@ -52,12 +52,22 @@ export default function Workspace() {
   const repository = repositories.find(r => r.id === selected);
 
   useEffect(() => {
+    function expired() {
+      setNeedsLogin(true); setBusy(false); setJob(null);
+      setError("Your session expired. Sign in again to continue.");
+    }
+    window.addEventListener("codeatlas:session-expired", expired);
+    return () => window.removeEventListener("codeatlas:session-expired", expired);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     api<Repository[]>("/api/repositories").then(data => {
       if (cancelled) return;
+      if (!data.length) { setTurns([]); setSource(null); setOverview(null); setFiles([]); }
       setRepositories(data); setSelected(current => data.some(r => r.id === current) ? current : data[0]?.id || "");
       setNeedsLogin(false); setError("");
-    }).catch(e => { if (!cancelled) { setError(e.message); setNeedsLogin(e.message.includes("Sign in")); } })
+    }).catch(e => { if (!cancelled) { setError(e.message); setNeedsLogin(e instanceof ApiError && e.status === 401); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [reload]);
@@ -83,11 +93,23 @@ export default function Workspace() {
     const timer = setTimeout(() => {
       api<Job>(`/api/jobs/${job.id}`).then(next => {
         if (cancelled) return;
+        setError("");
         setJob(next);
         if (next.status === "completed") { switchRepository(next.repository_id || ""); setReload(v => v + 1); setShowImport(false); }
         if (next.status === "failed") setError(next.error || "Import failed.");
-      }).catch(e => { if (!cancelled) { setError(e.message); setJob(null); } });
-    }, 1500);
+      }).catch(e => {
+        if (cancelled) return;
+        if (e instanceof ApiError && [0, 429, 502, 503, 504].includes(e.status)) {
+          setError(`${e.message} Progress updates will retry automatically.`);
+          setJob({ ...job });
+        } else {
+          setError(e instanceof ApiError && e.status === 404
+            ? "The indexing job was lost when the backend restarted. Import the repository again."
+            : e.message);
+          setJob(null);
+        }
+      });
+    }, 3000);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [job]);
 
@@ -138,12 +160,15 @@ export default function Workspace() {
 
   async function login(event: React.FormEvent) {
     event.preventDefault();
+    if (busy) return;
+    setBusy(true);
     try {
       const response = await fetch("/api/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
-      setPassword(""); setReload(v => v + 1);
-    } catch (e) { setError((e as Error).message); }
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result) throw new Error(result?.error || "Sign-in could not complete. Please retry.");
+      setPassword(""); setNeedsLogin(false); setLoading(true); setError(""); setReload(v => v + 1);
+    } catch (e) { setError(e instanceof TypeError ? "Sign-in connection failed. Please try again." : (e as Error).message); }
+    finally { setBusy(false); }
   }
 
   const activeJob = job && ["queued", "indexing"].includes(job.status);
@@ -160,10 +185,10 @@ export default function Workspace() {
     <section className="main-panel">
       <header className="panel-header"><div className="flex gap-3 items-center"><Button className="mobile-toggle" variant="ghost" size="icon" aria-label="Open navigation" onClick={() => setMobileNav(true)}><PanelLeft /></Button><h1>{navigation.find(n => n.id === view)?.label}</h1><span className="muted text-xs hidden sm:inline">/ {repository?.name || "No repository"}</span></div><Button variant="ghost" size="icon" aria-label="Open source evidence" onClick={() => setEvidenceOpen(!evidenceOpen)}><PanelRight /></Button></header>
       <div className="content">
-        {error && <div className="notice" role="alert">{error}<button className="float-right ml-3" aria-label="Dismiss error" onClick={() => setError("")}><X size={16} /></button></div>}
-        {needsLogin ? <form className="empty-state" onSubmit={login}><LockKeyhole className="text-violet-300" /><h2>Your investigation workspace</h2><p>Enter the workspace password to access repositories and AI tools.</p><label className="block mt-6">Workspace password<input className="block w-full mt-2" type="password" required maxLength={256} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></label><Button className="mt-4" type="submit">Sign in</Button></form>
+        {error && <div className="notice" role="alert">{error}{!needsLogin && !busy && <Button variant="ghost" size="sm" className="ml-3" onClick={() => { setError(""); setLoading(true); setReload(v => v + 1); }}>Retry connection</Button>}<button className="float-right ml-3" aria-label="Dismiss error" onClick={() => setError("")}><X size={16} /></button></div>}
+        {needsLogin ? <form className="empty-state" onSubmit={login}><LockKeyhole className="text-violet-300" /><h2>Your investigation workspace</h2><p>Enter the workspace password to access repositories and AI tools.</p><label className="block mt-6">Workspace password<input className="block w-full mt-2" type="password" required maxLength={256} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></label><Button className="mt-4" type="submit" disabled={busy}>{busy ? "Signing in..." : "Sign in"}</Button></form>
         : showImport || (!selected && !loading) ? <div className="empty-state"><Compass size={34} className="text-violet-300" /><h2>Find your way through the code.</h2><p>Import a public Python repository from GitHub. CodeAtlas indexes its source so you can explore, ask questions, and inspect the evidence.</p><form onSubmit={importRepository} className="mt-7"><label htmlFor="repo-url" className="block text-sm mb-2">Public GitHub repository URL</label><input id="repo-url" className="w-full" type="url" placeholder="https://github.com/psf/requests" required maxLength={250} value={url} onChange={e => setUrl(e.target.value)} disabled={!!activeJob} /><div className="flex items-center gap-3 mt-4"><Button type="submit" disabled={!!activeJob}>{activeJob ? <LoaderCircle className="pulse" /> : <Plus />}{activeJob ? "Indexing repository…" : "Import & index"}</Button>{selected && <Button variant="ghost" type="button" onClick={() => setShowImport(false)}>Cancel</Button>}</div></form>{job && <div className="mt-6 text-sm muted" role="status"><p>{job.status} · {job.progress}%</p><progress className="w-full mt-2 accent-violet-500" max={100} value={job.progress} /></div>}<p className="text-xs mt-6">Python files only. Provider availability and repository limits apply. Imported code is never executed.</p></div>
-        : loading ? <p className="muted" role="status">Connecting to your workspace…</p>
+        : loading ? <div className="muted" role="status"><p>Connecting to your workspace...</p><p className="text-sm mt-3">Free demo hosting can take a minute or more to wake up.</p></div>
         : view === "investigation" ? <>{turns.length === 0 && !busy && <div className="empty-state"><Compass size={32} className="text-violet-300" /><span className="eyebrow block mt-6">Start with a question</span><h2>Less searching.<br />More understanding.</h2><p>Ask about {repository?.name}. Follow the answer into the source, or let the agent investigate the connections.</p><div className="suggestions">{suggested.map(text => <button key={text} onClick={() => void ask(text)}>{text}</button>)}</div></div>}{turns.map((turn, i) => <article className="message" key={i}><div className="question">{turn.question}</div><div className="message-label"><Compass size={16} className="text-violet-300" />CodeAtlas <span className="ml-auto text-xs">{turn.result.duration_seconds !== undefined ? `${turn.result.duration_seconds}s` : mode.toUpperCase()}</span></div><GroundedAnswer text={turn.result.answer} sources={turn.result.sources} onSource={s => void openFile(s.file_path, s.start_line)} /><div className="flex flex-wrap gap-2 mt-4">{turn.result.sources.map(s => <button key={s.id} className="citation" onClick={() => void openFile(s.file_path, s.start_line)}>{s.id} · {s.file_path.split("/").pop()}:{s.start_line}</button>)}</div><p className="muted text-xs mt-3">{turn.result.citations_valid ? "Citation identifiers verified · Check source for factual accuracy." : "Citation identifiers not verified."} · {turn.result.termination_reason}</p>{!!turn.result.trace?.length && <details className="mt-4 text-sm muted"><summary>Tool execution trace · {turn.result.trace.length} events</summary><pre className="text-xs overflow-auto mt-3 p-3 bg-white/3 rounded">{JSON.stringify(turn.result.trace, null, 2)}</pre></details>}</article>)}{busy && <div role="status" className="flex gap-3 text-sm text-violet-300 items-center"><LoaderCircle className="pulse" size={18} />{mode === "agent" ? "Investigating with bounded repository tools…" : "Retrieving source evidence and generating an answer…"}</div>}<div ref={endRef} /></>
         : !overview ? <p className="muted">Loading repository analysis…</p>
         : view === "architecture" ? <Architecture overview={overview} onSelect={p => void openFile(p)} />

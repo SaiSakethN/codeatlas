@@ -1,6 +1,7 @@
 """Persistent repository catalog and bounded single-worker indexing jobs."""
 
 import json
+import logging
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -60,11 +61,14 @@ class RepositoryService:
             self.jobs[identifier].update(values)
 
     def run(self, identifier: str, url: str):
+        phase = "preflight"
         try:
             self.update(identifier, status="indexing")
             with self.compute:
                 self.preflight(url)
+                phase = "clone"
                 repository = clone_repository(url)
+                phase = "index"
                 _, statistics = index_repository(
                     repository,
                     progress_callback=lambda done, total: self.update(
@@ -72,6 +76,7 @@ class RepositoryService:
                     ),
                 )
                 repository_id = get_repository_id(repository)
+                phase = "catalog"
                 with self.lock:
                     self.records[repository_id] = {
                         "id": repository_id,
@@ -82,12 +87,28 @@ class RepositoryService:
                     }
                     self.save()
             self.update(identifier, status="completed", progress=100, repository_id=repository_id)
-        except Exception:
+        except Exception as exc:
             # Provider and Git exceptions can contain credentials or local paths.
+            logging.getLogger(__name__).error(
+                "Repository job failed: phase=%s exception_type=%s", phase, type(exc).__name__
+            )
+            messages = {
+                "preflight": (
+                    "GitHub could not approve this import. "
+                    "Check public access, repository size, and GitHub rate limits."
+                ),
+                "clone": "GitHub cloning failed or timed out. Check the repository URL and retry.",
+                "index": (
+                    "Embedding or indexing failed. "
+                    "Check the backend logs for its failure stage, then retry the import."
+                ),
+                "catalog": "The index could not be saved. Check the writable data directory.",
+            }
             self.update(
                 identifier,
                 status="failed",
-                error="Import failed. Check repository availability and provider readiness.",
+                error=messages[phase],
+                error_code=f"{phase}_failed",
             )
 
     def preflight(self, url: str):

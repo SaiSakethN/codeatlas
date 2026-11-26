@@ -29,6 +29,8 @@ class Settings(BaseSettings):
 
     llm_provider: Literal["ollama", "openai", "fastembed"] = "ollama"
     fastembed_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    fastembed_threads: int = Field(default=1, ge=1, le=2)
+    fastembed_batch_size: int = Field(default=4, ge=1, le=16)
 
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"

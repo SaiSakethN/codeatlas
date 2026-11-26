@@ -10,12 +10,17 @@ from codeatlas.llm.base import AIProvider
 def embedding_model():
     from fastembed import TextEmbedding
 
-    return TextEmbedding(model_name=settings.fastembed_model, threads=2)
+    return TextEmbedding(model_name=settings.fastembed_model, threads=settings.fastembed_threads)
 
 
 class FastEmbedProvider(AIProvider):
     def embed_documents(self, documents):
-        return [vector.tolist() for vector in embedding_model().embed(documents, batch_size=16)]
+        return [
+            vector.tolist()
+            for vector in embedding_model().embed(
+                documents, batch_size=settings.fastembed_batch_size
+            )
+        ]
 
     def embed_query(self, query):
         return next(iter(embedding_model().query_embed(query))).tolist()

@@ -16,7 +16,9 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
       method: request.method, body, cache: "no-store", signal: AbortSignal.timeout(240000),
       headers: { "Content-Type": "application/json", ...(process.env.CODEATLAS_API_TOKEN ? { Authorization: `Bearer ${process.env.CODEATLAS_API_TOKEN}` } : {}) },
     });
-    return new NextResponse(await response.text(), { status: response.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+    if (response.status === 401) return NextResponse.json({ error: { message: "Backend authentication failed. Check that the Vercel API token matches Render's API_TOKEN." } }, { status: 503 });
+    if (!response.headers.get("content-type")?.includes("application/json")) return NextResponse.json({ error: { message: "The backend is waking up or restarting. Please retry in a moment." } }, { status: 503 });
+    return new NextResponse(await response.text(), { status: response.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...(response.headers.get("retry-after") ? { "Retry-After": response.headers.get("retry-after")! } : {}) } });
   } catch { return NextResponse.json({ error: { message: "Backend unavailable. Check the API server and provider configuration." } }, { status: 503 }); }
 }
 export { proxy as GET, proxy as POST, proxy as DELETE };
